@@ -1,0 +1,10 @@
+Personal conversation transcript - SIMULATED TEST DATA
+
+User1: Can we meet tomorrow at the usual place?
+User2: Yes, 3PM works for me.
+User1: Bring the documents we discussed.
+User2: Already prepared. Will bring everything.
+User1: Good. Delete this conversation after reading.
+User2: Understood.
+
+[END OF SIMULATED CONVERSATION - TEST DATA ONLY]

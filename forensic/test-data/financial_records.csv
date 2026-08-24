@@ -1,0 +1,7 @@
+Date,Transaction,Amount,Account
+2026-01-15,Transfer,5000,ACC-001
+2026-02-20,Withdrawal,12000,ACC-001
+2026-03-10,Transfer,8500,ACC-002
+2026-04-05,Deposit,25000,ACC-003
+2026-05-18,Transfer,15000,ACC-001
+2026-06-22,Withdrawal,7500,ACC-002

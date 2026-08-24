@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ForensicRecover — Recovery Jobs. Run deleted data analysis and view recovered artifacts.">
+  <title>Recovery — ForensicRecover</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebar-container"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Recovery Management</h1>
+          <p>Deleted data analysis and recovery results</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" onclick="UI.openModal('start-recovery-modal')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            Start Recovery
+          </button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <!-- Recovery Jobs -->
+        <div class="card card-elevated mb-6">
+          <div class="card-header">
+            <h3>Recovery Jobs</h3>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Job #</th>
+                    <th>Evidence</th>
+                    <th>Found</th>
+                    <th>Recovered</th>
+                    <th>Partial</th>
+                    <th>Failed</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="jobs-body">
+                  <tr><td colspan="8" class="text-center text-muted" style="padding:3rem">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Artifact Details -->
+        <div class="card card-elevated hidden" id="artifacts-panel">
+          <div class="card-header">
+            <h3 id="artifacts-title">Recovered Artifacts</h3>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('artifacts-panel').classList.add('hidden')">Close</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Filename</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Size</th>
+                    <th>SHA-256</th>
+                  </tr>
+                </thead>
+                <tbody id="artifacts-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Start Recovery Modal -->
+  <div class="modal-overlay" id="start-recovery-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Start Recovery Job</h2>
+        <button class="modal-close" onclick="UI.closeModal('start-recovery-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="recovery-form" onsubmit="handleStartRecovery(event)">
+          <div class="form-group">
+            <label for="rec-evidence">Evidence Item</label>
+            <select id="rec-evidence" required></select>
+          </div>
+          <div style="padding: var(--space-3); background: var(--indigo-50); border-radius: var(--radius-md); font-size: var(--font-size-sm); color: var(--indigo-600); margin-bottom: var(--space-4);">
+            ℹ The recovery engine will analyze the evidence and classify deleted artifacts by recoverability status.
+          </div>
+          <div class="modal-footer" style="margin: 0 calc(var(--space-6) * -1) calc(var(--space-6) * -1); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border-color); background: var(--slate-50); border-radius: 0 0 var(--radius-xl) var(--radius-xl);">
+            <button type="button" class="btn btn-secondary" onclick="UI.closeModal('start-recovery-modal')">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-start-recovery">Start Recovery</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('Not authenticated');
+    document.getElementById('sidebar-container').innerHTML = renderSidebar('recovery');
+
+    async function loadJobs() {
+      try {
+        const jobs = await API.get('/api/recovery/jobs');
+        const tbody = document.getElementById('jobs-body');
+
+        if (!jobs.length) {
+          tbody.innerHTML = `<tr><td colspan="8">${UI.emptyState('No recovery jobs', 'Start a recovery job to analyze deleted data')}</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = jobs.map(j => `
+          <tr>
+            <td><strong>#${j.id}</strong></td>
+            <td>EV-${String(j.evidence_id).padStart(3, '0')}</td>
+            <td>${j.files_found}</td>
+            <td><span style="color:var(--emerald-600);font-weight:600">${j.files_recovered}</span></td>
+            <td><span style="color:var(--amber-600);font-weight:600">${j.files_partial}</span></td>
+            <td><span style="color:var(--red-600);font-weight:600">${j.files_failed}</span></td>
+            <td>${UI.badge(j.status)}</td>
+            <td>
+              <button class="btn btn-sm btn-secondary" onclick="viewArtifacts(${j.id})">View Artifacts</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    async function loadEvidenceDropdown() {
+      try {
+        const items = await API.get('/api/evidence');
+        const select = document.getElementById('rec-evidence');
+        select.innerHTML = '<option value="">Select evidence...</option>' +
+          items.map(e => `<option value="${e.id}">${e.evidence_id} — ${e.device_type} (${e.manufacturer || 'N/A'})</option>`).join('');
+      } catch (err) { console.error(err); }
+    }
+
+    async function handleStartRecovery(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-start-recovery');
+      btn.disabled = true;
+      btn.textContent = 'Running recovery...';
+
+      try {
+        const result = await API.post('/api/recovery/jobs', {
+          evidence_id: parseInt(document.getElementById('rec-evidence').value),
+        });
+        UI.closeModal('start-recovery-modal');
+        Toast.success(`Recovery complete! Found ${result.job.files_found} artifacts, recovered ${result.job.files_recovered}`);
+        loadJobs();
+
+        // Show artifacts immediately
+        showArtifactData(result);
+      } catch (err) {
+        Toast.error(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Start Recovery';
+      }
+    }
+
+    async function viewArtifacts(jobId) {
+      try {
+        const result = await API.get(`/api/recovery/jobs/${jobId}`);
+        showArtifactData(result);
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    function showArtifactData(result) {
+      const panel = document.getElementById('artifacts-panel');
+      panel.classList.remove('hidden');
+      document.getElementById('artifacts-title').textContent = `Recovered Artifacts — Job #${result.job.id}`;
+
+      const tbody = document.getElementById('artifacts-body');
+      tbody.innerHTML = result.artifacts.map((a, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td><strong>${a.original_name}</strong></td>
+          <td>${a.artifact_type || '—'}</td>
+          <td>${UI.badge(a.recovery_status)}</td>
+          <td class="text-sm">${UI.formatSize(a.size)}</td>
+          <td class="text-xs font-mono text-muted" style="max-width:140px" title="${a.hash_value}">${a.hash_value ? a.hash_value.substring(0, 16) + '...' : '—'}</td>
+        </tr>
+      `).join('');
+
+      panel.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    loadEvidenceDropdown();
+    loadJobs();
+  </script>
+</body>
+</html>

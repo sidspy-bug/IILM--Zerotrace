@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ForensicRecover — Evidence Management. Register and track digital evidence items.">
+  <title>Evidence — ForensicRecover</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebar-container"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Evidence Management</h1>
+          <p>Register and track digital evidence</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" onclick="UI.openModal('create-evidence-modal')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Register Evidence
+          </button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div class="card card-elevated">
+          <div class="card-header">
+            <h3>All Evidence</h3>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Evidence ID</th>
+                    <th>Device</th>
+                    <th>Manufacturer</th>
+                    <th>Storage</th>
+                    <th>Filesystem</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="evidence-body">
+                  <tr><td colspan="7" class="text-center text-muted" style="padding:3rem">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Device Analysis Panel -->
+        <div class="card card-elevated mt-6 hidden" id="analysis-panel">
+          <div class="card-header">
+            <h3>Device Analysis & Recovery Assessment</h3>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('analysis-panel').classList.add('hidden')">Close</button>
+          </div>
+          <div class="card-body" id="analysis-content"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Register Evidence Modal -->
+  <div class="modal-overlay" id="create-evidence-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Register Evidence</h2>
+        <button class="modal-close" onclick="UI.closeModal('create-evidence-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="evidence-form" onsubmit="handleCreateEvidence(event)">
+          <div class="form-group">
+            <label for="ev-case">Case</label>
+            <select id="ev-case" required></select>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label for="ev-device">Device Type</label>
+              <select id="ev-device" required>
+                <option value="">Select...</option>
+                <option value="Laptop">Laptop</option>
+                <option value="Desktop">Desktop</option>
+                <option value="Server">Server</option>
+                <option value="Mobile Phone">Mobile Phone</option>
+                <option value="Tablet">Tablet</option>
+                <option value="External HDD">External HDD</option>
+                <option value="External SSD">External SSD</option>
+                <option value="USB Drive">USB Drive</option>
+                <option value="SD Card">SD Card</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="ev-manufacturer">Manufacturer</label>
+              <input type="text" id="ev-manufacturer" placeholder="e.g. Dell, HP, Samsung">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label for="ev-model">Model</label>
+              <input type="text" id="ev-model" placeholder="e.g. Inspiron 15">
+            </div>
+            <div class="form-group">
+              <label for="ev-serial">Serial Number</label>
+              <input type="text" id="ev-serial" placeholder="Device serial number">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label for="ev-capacity">Storage Capacity</label>
+              <input type="text" id="ev-capacity" placeholder="e.g. 1 TB">
+            </div>
+            <div class="form-group">
+              <label for="ev-filesystem">Filesystem</label>
+              <select id="ev-filesystem">
+                <option value="">Select...</option>
+                <option value="NTFS">NTFS</option>
+                <option value="FAT32">FAT32</option>
+                <option value="exFAT">exFAT</option>
+                <option value="EXT4">EXT4</option>
+                <option value="EXT3">EXT3</option>
+                <option value="APFS">APFS</option>
+                <option value="HFS+">HFS+</option>
+                <option value="XFS">XFS</option>
+                <option value="Unknown">Unknown</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer" style="margin: 0 calc(var(--space-6) * -1) calc(var(--space-6) * -1); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border-color); background: var(--slate-50); border-radius: 0 0 var(--radius-xl) var(--radius-xl);">
+            <button type="button" class="btn btn-secondary" onclick="UI.closeModal('create-evidence-modal')">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-create-evidence">Register</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('Not authenticated');
+    document.getElementById('sidebar-container').innerHTML = renderSidebar('evidence');
+
+    // Check for case_id filter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const filterCaseId = urlParams.get('case_id');
+
+    async function loadEvidence() {
+      try {
+        const url = filterCaseId ? `/api/evidence?case_id=${filterCaseId}` : '/api/evidence';
+        const items = await API.get(url);
+        const tbody = document.getElementById('evidence-body');
+
+        if (!items.length) {
+          tbody.innerHTML = `<tr><td colspan="7">${UI.emptyState('No evidence registered', 'Click "Register Evidence" to add a new item')}</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = items.map(e => `
+          <tr>
+            <td><strong>${e.evidence_id}</strong></td>
+            <td>${e.device_type}</td>
+            <td>${e.manufacturer || '—'}</td>
+            <td>${e.capacity || '—'}</td>
+            <td>${e.filesystem || '—'}</td>
+            <td>${UI.badge(e.status)}</td>
+            <td>
+              <div class="flex gap-2">
+                <button class="btn btn-sm btn-secondary" onclick="analyzeDevice(${e.id})">Analyze</button>
+                <button class="btn btn-sm btn-primary" onclick="computeHash(${e.id})">Hash</button>
+                <button class="btn btn-sm btn-success" onclick="verifyIntegrity(${e.id})">Verify</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    async function loadCasesForDropdown() {
+      try {
+        const cases = await API.get('/api/cases');
+        const select = document.getElementById('ev-case');
+        select.innerHTML = '<option value="">Select case...</option>' +
+          cases.map(c => `<option value="${c.id}" ${c.id == filterCaseId ? 'selected' : ''}>${c.case_number} — ${c.case_type}</option>`).join('');
+      } catch (err) { console.error(err); }
+    }
+
+    async function handleCreateEvidence(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-create-evidence');
+      btn.disabled = true;
+      try {
+        await API.post('/api/evidence', {
+          case_id: parseInt(document.getElementById('ev-case').value),
+          device_type: document.getElementById('ev-device').value,
+          manufacturer: document.getElementById('ev-manufacturer').value,
+          model: document.getElementById('ev-model').value,
+          serial_number: document.getElementById('ev-serial').value,
+          capacity: document.getElementById('ev-capacity').value,
+          filesystem: document.getElementById('ev-filesystem').value,
+        });
+        UI.closeModal('create-evidence-modal');
+        document.getElementById('evidence-form').reset();
+        Toast.success('Evidence registered successfully');
+        loadEvidence();
+      } catch (err) {
+        Toast.error(err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function analyzeDevice(id) {
+      try {
+        const analysis = await API.get(`/api/evidence/${id}/analysis`);
+        const panel = document.getElementById('analysis-panel');
+        panel.classList.remove('hidden');
+
+        document.getElementById('analysis-content').innerHTML = `
+          <div class="grid-2 gap-6">
+            <div>
+              <h4 style="font-weight:600; margin-bottom: var(--space-4)">Device Information</h4>
+              <table class="data-table">
+                <tbody>
+                  <tr><td style="font-weight:600;width:140px">Type</td><td>${analysis.device_info.type}</td></tr>
+                  <tr><td style="font-weight:600">Manufacturer</td><td>${analysis.device_info.manufacturer}</td></tr>
+                  <tr><td style="font-weight:600">Model</td><td>${analysis.device_info.model}</td></tr>
+                  <tr><td style="font-weight:600">Capacity</td><td>${analysis.device_info.capacity}</td></tr>
+                  <tr><td style="font-weight:600">Filesystem</td><td>${analysis.device_info.filesystem}</td></tr>
+                  <tr><td style="font-weight:600">Storage Class</td><td>${analysis.storage_classification}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <h4 style="font-weight:600; margin-bottom: var(--space-4)">Recovery Assessment</h4>
+              <div style="font-size: var(--font-size-3xl); font-weight: 800; margin-bottom: var(--space-4);">
+                ${UI.badge(analysis.recovery_potential)}
+              </div>
+              ${analysis.analysis_factors.length ? `
+                <div style="margin-top: var(--space-4)">
+                  <strong style="font-size: var(--font-size-sm)">Factors:</strong>
+                  <ul style="margin-top: var(--space-2); padding-left: 1.25rem; font-size: var(--font-size-sm); color: var(--text-secondary)">
+                    ${analysis.analysis_factors.map(f => `<li style="margin-bottom:4px">${f}</li>`).join('')}
+                  </ul>
+                </div>
+              ` : ''}
+              ${analysis.warnings.length ? `
+                <div style="margin-top: var(--space-4); padding: var(--space-3); background: #FEF2F2; border-radius: var(--radius-md); font-size: var(--font-size-sm); color: var(--red-600)">
+                  ⚠ ${analysis.warnings.join('. ')}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        panel.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    async function computeHash(id) {
+      try {
+        const result = await API.post('/api/integrity/hash', { evidence_id: id });
+        Toast.success(`SHA-256: ${result.hash_value.substring(0, 16)}...`);
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    async function verifyIntegrity(id) {
+      try {
+        const result = await API.post(`/api/integrity/verify/${id}`);
+        if (result.match) {
+          Toast.success('✓ ' + result.message);
+        } else if (result.match === false) {
+          Toast.error('⚠ ' + result.message);
+        } else {
+          Toast.warning(result.message);
+        }
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    loadCasesForDropdown();
+    loadEvidence();
+  </script>
+</body>
+</html>

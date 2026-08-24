@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ForensicRecover — Digital Evidence Recovery, Verification, Preservation & Investigation Platform. Secure login for authorized investigators.">
+  <title>ForensicRecover — Login</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-page">
+
+  <div class="login-card" id="login-card">
+    <div class="login-brand">
+      <div class="shield-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12.99H5V8.26l7-3.89v8.62z"/>
+        </svg>
+      </div>
+      <h1>ForensicRecover</h1>
+      <p>Digital Evidence Investigation Platform</p>
+    </div>
+
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group" id="fg-username">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="Enter your username" required autocomplete="username">
+        <div class="form-error" id="err-username">Username is required</div>
+      </div>
+
+      <div class="form-group" id="fg-password">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+        <div class="form-error" id="err-password">Password is required</div>
+      </div>
+
+      <div id="login-error" style="display:none; color: #DC2626; font-size: 0.8125rem; margin-bottom: 1rem; text-align: center; font-weight: 500;"></div>
+
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-btn">
+        Sign In
+      </button>
+    </form>
+
+    <div style="margin-top: 1.5rem; text-align: center;">
+      <p class="text-xs text-muted">Authorized access only. All activity is monitored and logged.</p>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // Redirect if already logged in
+    if (Auth.isLoggedIn()) {
+      window.location.href = '/dashboard';
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      const errDiv = document.getElementById('login-error');
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      errDiv.style.display = 'none';
+      btn.textContent = 'Signing in...';
+      btn.disabled = true;
+
+      try {
+        const data = await API.login(username, password);
+        Auth.setSession(data.access_token, data.user);
+        window.location.href = '/dashboard';
+      } catch (err) {
+        errDiv.textContent = err.message || 'Invalid credentials';
+        errDiv.style.display = 'block';
+        btn.textContent = 'Sign In';
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

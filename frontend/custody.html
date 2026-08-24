@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ForensicRecover — Chain of Custody. Track evidence handling with tamper-evident timeline.">
+  <title>Chain of Custody — ForensicRecover</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebar-container"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Chain of Custody</h1>
+          <p>Evidence handling timeline with tamper-evident verification</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" onclick="UI.openModal('add-custody-modal')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Record Event
+          </button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <!-- Evidence Selector -->
+        <div class="card card-elevated mb-6">
+          <div class="card-body">
+            <div class="flex items-center gap-4">
+              <div class="form-group" style="margin:0; flex:1; max-width:300px">
+                <label for="custody-evidence" style="margin-bottom: var(--space-1)">Select Evidence</label>
+                <select id="custody-evidence" onchange="loadCustodyTimeline()"></select>
+              </div>
+              <button class="btn btn-success" onclick="verifyCustodyChain()" style="margin-top:18px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Verify Chain
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chain Verification Result -->
+        <div class="card card-elevated mb-6 hidden" id="chain-result">
+          <div class="card-body" id="chain-result-content"></div>
+        </div>
+
+        <!-- Custody Timeline -->
+        <div class="card card-elevated">
+          <div class="card-header">
+            <h3>Custody Timeline</h3>
+          </div>
+          <div class="card-body" id="timeline-container">
+            <div class="empty-state">
+              <h3>Select an evidence item</h3>
+              <p>Choose an evidence item above to view its custody timeline</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add Custody Event Modal -->
+  <div class="modal-overlay" id="add-custody-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Record Custody Event</h2>
+        <button class="modal-close" onclick="UI.closeModal('add-custody-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="custody-form" onsubmit="handleAddCustody(event)">
+          <div class="form-group">
+            <label for="cust-evidence">Evidence Item</label>
+            <select id="cust-evidence" required></select>
+          </div>
+          <div class="form-group">
+            <label for="cust-action">Action</label>
+            <select id="cust-action" required>
+              <option value="">Select action...</option>
+              <option value="COLLECTED">Collected</option>
+              <option value="TRANSFERRED">Transferred</option>
+              <option value="RECEIVED">Received</option>
+              <option value="ACQUISITION_STARTED">Acquisition Started</option>
+              <option value="ACQUISITION_COMPLETED">Acquisition Completed</option>
+              <option value="ANALYSIS_STARTED">Analysis Started</option>
+              <option value="RECOVERY_STARTED">Recovery Started</option>
+              <option value="RECOVERY_COMPLETED">Recovery Completed</option>
+              <option value="REVIEWED">Reviewed</option>
+              <option value="REPORT_GENERATED">Report Generated</option>
+              <option value="RETURNED">Returned</option>
+            </select>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label for="cust-from">From</label>
+              <input type="text" id="cust-from" placeholder="Person/dept handing over">
+            </div>
+            <div class="form-group">
+              <label for="cust-to">To</label>
+              <input type="text" id="cust-to" placeholder="Person/dept receiving">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="cust-remarks">Remarks</label>
+            <textarea id="cust-remarks" placeholder="Additional notes..." rows="2"></textarea>
+          </div>
+          <div class="modal-footer" style="margin: 0 calc(var(--space-6) * -1) calc(var(--space-6) * -1); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border-color); background: var(--slate-50); border-radius: 0 0 var(--radius-xl) var(--radius-xl);">
+            <button type="button" class="btn btn-secondary" onclick="UI.closeModal('add-custody-modal')">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-add-custody">Record Event</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('Not authenticated');
+    document.getElementById('sidebar-container').innerHTML = renderSidebar('custody');
+
+    async function loadEvidenceOptions() {
+      try {
+        const items = await API.get('/api/evidence');
+        const html = '<option value="">Select evidence...</option>' +
+          items.map(e => `<option value="${e.id}">${e.evidence_id} — ${e.device_type}</option>`).join('');
+        document.getElementById('custody-evidence').innerHTML = html;
+        document.getElementById('cust-evidence').innerHTML = html;
+      } catch (err) { console.error(err); }
+    }
+
+    async function loadCustodyTimeline() {
+      const evidenceId = document.getElementById('custody-evidence').value;
+      const container = document.getElementById('timeline-container');
+
+      if (!evidenceId) {
+        container.innerHTML = UI.emptyState('Select an evidence item', 'Choose from the dropdown above');
+        return;
+      }
+
+      try {
+        const events = await API.get(`/api/custody/events/${evidenceId}`);
+
+        if (!events.length) {
+          container.innerHTML = UI.emptyState('No custody events', 'Record the first custody event for this evidence');
+          return;
+        }
+
+        container.innerHTML = `
+          <div class="timeline">
+            ${events.map((e, i) => `
+              <div class="timeline-item">
+                <div class="timeline-node"></div>
+                <div class="timeline-card">
+                  <div class="timeline-action">${e.action.replace(/_/g, ' ')}</div>
+                  <div class="timeline-meta">
+                    ${e.from_user ? `<span>From: <strong>${e.from_user}</strong></span>` : ''}
+                    ${e.to_user ? `<span> → To: <strong>${e.to_user}</strong></span>` : ''}
+                    <span style="margin-left: var(--space-3)">🕐 ${UI.formatDate(e.timestamp)}</span>
+                  </div>
+                  ${e.remarks ? `<div style="margin-top: var(--space-2); font-size: var(--font-size-sm); color: var(--text-secondary);">${e.remarks}</div>` : ''}
+                  <div class="timeline-hash">
+                    🔗 ${e.event_hash.substring(0, 24)}...
+                    ${e.previous_hash ? `<br>← prev: ${e.previous_hash.substring(0, 16)}...` : '<br>← (genesis event)'}
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    async function verifyCustodyChain() {
+      const evidenceId = document.getElementById('custody-evidence').value;
+      if (!evidenceId) {
+        Toast.warning('Select an evidence item first');
+        return;
+      }
+
+      try {
+        const result = await API.get(`/api/custody/verify/${evidenceId}`);
+        const panel = document.getElementById('chain-result');
+        panel.classList.remove('hidden');
+
+        if (result.valid) {
+          document.getElementById('chain-result-content').innerHTML = `
+            <div class="integrity-verified" style="font-size: var(--font-size-md);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px"><polyline points="20 6 9 17 4 12"/></svg>
+              ${result.message}
+            </div>
+            <div class="text-sm text-muted mt-2">${result.event_count} events verified in the chain</div>
+          `;
+        } else {
+          document.getElementById('chain-result-content').innerHTML = `
+            <div class="integrity-alert" style="font-size: var(--font-size-md);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              ${result.message}
+            </div>
+          `;
+        }
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    async function handleAddCustody(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-add-custody');
+      btn.disabled = true;
+
+      try {
+        await API.post('/api/custody/events', {
+          evidence_id: parseInt(document.getElementById('cust-evidence').value),
+          action: document.getElementById('cust-action').value,
+          from_user: document.getElementById('cust-from').value,
+          to_user: document.getElementById('cust-to').value,
+          remarks: document.getElementById('cust-remarks').value,
+        });
+        UI.closeModal('add-custody-modal');
+        document.getElementById('custody-form').reset();
+        Toast.success('Custody event recorded with tamper-evident hash');
+
+        // Reload timeline if same evidence is selected
+        const selected = document.getElementById('custody-evidence').value;
+        if (selected) loadCustodyTimeline();
+      } catch (err) {
+        Toast.error(err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    loadEvidenceOptions();
+  </script>
+</body>
+</html>

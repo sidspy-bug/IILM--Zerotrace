@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ForensicRecover Investigator Dashboard — Overview of cases, evidence, recovery jobs, and integrity status.">
+  <title>Dashboard — ForensicRecover</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebar-container"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Investigator Dashboard</h1>
+          <p>Overview of all forensic operations</p>
+        </div>
+        <div class="page-actions">
+          <a href="/cases" class="btn btn-primary" id="btn-new-case">New Case</a>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <!-- Stats Cards -->
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card indigo card-elevated">
+            <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+            <div class="stat-value" id="stat-cases">—</div>
+            <div class="stat-label">Total Cases</div>
+            <div class="stat-sub" id="stat-cases-sub"></div>
+          </div>
+          <div class="stat-card emerald card-elevated">
+            <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="stat-value" id="stat-evidence">—</div>
+            <div class="stat-label">Evidence Items</div>
+            <div class="stat-sub" id="stat-evidence-sub"></div>
+          </div>
+          <div class="stat-card amber card-elevated">
+            <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></div>
+            <div class="stat-value" id="stat-recovered">—</div>
+            <div class="stat-label">Files Recovered</div>
+            <div class="stat-sub" id="stat-recovered-sub"></div>
+          </div>
+          <div class="stat-card sky card-elevated">
+            <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
+            <div class="stat-value" id="stat-reports">—</div>
+            <div class="stat-label">Reports Generated</div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid mb-6">
+          <div class="card card-elevated">
+            <div class="card-header"><h3>Recovery Results</h3></div>
+            <div class="card-body">
+              <div class="chart-container">
+                <canvas id="recovery-chart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="card card-elevated">
+            <div class="card-header"><h3>Case Status Distribution</h3></div>
+            <div class="card-body">
+              <div class="chart-container">
+                <canvas id="cases-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="card card-elevated">
+          <div class="card-header"><h3>Quick Actions</h3></div>
+          <div class="card-body">
+            <div class="grid-3 gap-4">
+              <a href="/cases" class="stat-card indigo" style="text-decoration:none; cursor:pointer;">
+                <div class="stat-label" style="font-weight:600; color: var(--text-primary);">Create Case</div>
+                <div class="stat-sub">Start a new investigation</div>
+              </a>
+              <a href="/evidence" class="stat-card emerald" style="text-decoration:none; cursor:pointer;">
+                <div class="stat-label" style="font-weight:600; color: var(--text-primary);">Register Evidence</div>
+                <div class="stat-sub">Add new digital evidence</div>
+              </a>
+              <a href="/recovery" class="stat-card amber" style="text-decoration:none; cursor:pointer;">
+                <div class="stat-label" style="font-weight:600; color: var(--text-primary);">Run Recovery</div>
+                <div class="stat-sub">Start deleted data analysis</div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('Not authenticated');
+
+    document.getElementById('sidebar-container').innerHTML = renderSidebar('dashboard');
+
+    let recoveryChart, casesChart;
+
+    async function loadDashboard() {
+      try {
+        const stats = await API.get('/api/dashboard/stats');
+
+        document.getElementById('stat-cases').textContent = stats.cases.total;
+        document.getElementById('stat-cases-sub').textContent = `${stats.cases.active} active, ${stats.cases.closed} closed`;
+
+        document.getElementById('stat-evidence').textContent = stats.evidence.total;
+        document.getElementById('stat-evidence-sub').textContent = `${stats.evidence.hashes_computed} hashes computed`;
+
+        document.getElementById('stat-recovered').textContent = stats.recovery.files_recovered;
+        document.getElementById('stat-recovered-sub').textContent = `${stats.recovery.files_found} found, ${stats.recovery.files_partial} partial, ${stats.recovery.files_failed} failed`;
+
+        document.getElementById('stat-reports').textContent = stats.reports.total;
+
+        // Recovery chart
+        if (recoveryChart) recoveryChart.destroy();
+        const rcCtx = document.getElementById('recovery-chart').getContext('2d');
+        recoveryChart = new Chart(rcCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Fully Recovered', 'Partially Recovered', 'Failed'],
+            datasets: [{
+              data: [stats.recovery.files_recovered, stats.recovery.files_partial, stats.recovery.files_failed],
+              backgroundColor: [ChartColors.emerald, ChartColors.amber, ChartColors.red],
+              borderWidth: 0,
+              hoverOffset: 8,
+            }],
+          },
+          options: {
+            responsive: true,
+            cutout: '65%',
+            plugins: {
+              legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, font: { family: 'Inter', size: 12 } } },
+            },
+          },
+        });
+
+        // Cases chart
+        if (casesChart) casesChart.destroy();
+        const ccCtx = document.getElementById('cases-chart').getContext('2d');
+        casesChart = new Chart(ccCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Active', 'Closed'],
+            datasets: [{
+              data: [stats.cases.active, stats.cases.closed],
+              backgroundColor: [ChartColors.indigo, ChartColors.slate],
+              borderWidth: 0,
+              hoverOffset: 8,
+            }],
+          },
+          options: {
+            responsive: true,
+            cutout: '65%',
+            plugins: {
+              legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, font: { family: 'Inter', size: 12 } } },
+            },
+          },
+        });
+
+      } catch (err) {
+        Toast.error('Failed to load dashboard: ' + err.message);
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

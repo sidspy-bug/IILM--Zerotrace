@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ForensicRecover — Report Generation. Generate and download forensic investigation PDF reports.">
+  <title>Reports — ForensicRecover</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebar-container"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Report Generation</h1>
+          <p>Generate and download forensic investigation reports</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" onclick="UI.openModal('generate-report-modal')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            Generate Report
+          </button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <!-- Report Generation Info -->
+        <div class="card card-elevated mb-6">
+          <div class="card-body">
+            <div style="display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2);">
+              <div style="width:48px; height:48px; background: var(--indigo-50); border-radius: var(--radius-md); display:flex; align-items:center; justify-content:center; flex-shrink:0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--indigo-600)" stroke-width="2" style="width:24px;height:24px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <div>
+                <div style="font-weight:600; color: var(--text-primary); margin-bottom:2px">Forensic Investigation Report</div>
+                <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">
+                  Each PDF report includes: Case Information, Evidence Details, Device Analysis, Recovery Results, Recovered Artifacts, Chain of Custody, Integrity Verification, and Investigator Review.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reports List -->
+        <div class="card card-elevated">
+          <div class="card-header">
+            <h3>Generated Reports</h3>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Report #</th>
+                    <th>Case</th>
+                    <th>Type</th>
+                    <th>Generated</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="reports-body">
+                  <tr><td colspan="6" class="text-center text-muted" style="padding:3rem">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Generate Report Modal -->
+  <div class="modal-overlay" id="generate-report-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Generate Report</h2>
+        <button class="modal-close" onclick="UI.closeModal('generate-report-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="report-form" onsubmit="handleGenerateReport(event)">
+          <div class="form-group">
+            <label for="report-case">Case</label>
+            <select id="report-case" required></select>
+          </div>
+          <div style="padding: var(--space-3); background: var(--indigo-50); border-radius: var(--radius-md); font-size: var(--font-size-sm); color: var(--indigo-600); margin-bottom: var(--space-4);">
+            ℹ The report will include all evidence, recovery results, custody events, and integrity records for the selected case.
+          </div>
+          <div class="modal-footer" style="margin: 0 calc(var(--space-6) * -1) calc(var(--space-6) * -1); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border-color); background: var(--slate-50); border-radius: 0 0 var(--radius-xl) var(--radius-xl);">
+            <button type="button" class="btn btn-secondary" onclick="UI.closeModal('generate-report-modal')">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-generate-report">Generate PDF</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js?v=2"></script>
+  <script>
+    // Inline fallback — works even if app.js is cached without downloadPdf
+    if (typeof API.downloadPdf !== 'function') {
+      API.downloadPdf = async function(url, filename) {
+        try {
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('fr_token') || '') }
+          });
+          if (res.status === 401) { Auth.logout(); return; }
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'Download failed' }));
+            throw new Error(err.detail || 'Download failed');
+          }
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename || 'report.pdf';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+          Toast.error('Download failed: ' + err.message);
+        }
+      };
+    }
+
+    if (!requireAuth()) throw new Error('Not authenticated');
+    document.getElementById('sidebar-container').innerHTML = renderSidebar('reports');
+
+    async function loadReports() {
+      try {
+        const reports = await API.get('/api/reports');
+        const tbody = document.getElementById('reports-body');
+
+        if (!reports.length) {
+          tbody.innerHTML = `<tr><td colspan="6">${UI.emptyState('No reports generated', 'Generate your first forensic investigation report')}</td></tr>`;
+          return;
+        }
+
+        // Load case data for display
+        const cases = await API.get('/api/cases');
+        const caseMap = {};
+        cases.forEach(c => caseMap[c.id] = c.case_number);
+
+        tbody.innerHTML = reports.map(r => `
+          <tr>
+            <td><strong>RPT-${String(r.id).padStart(3, '0')}</strong></td>
+            <td>${caseMap[r.case_id] || 'CASE-???'}</td>
+            <td>${r.report_type}</td>
+            <td class="text-sm">${UI.formatDate(r.generated_at)}</td>
+            <td>${UI.badge(r.status)}</td>
+            <td>
+              <button class="btn btn-sm btn-primary" onclick="API.downloadPdf('/api/reports/${r.id}/download', 'ForensicReport_RPT-${String(r.id).padStart(3, '0')}.pdf')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download PDF
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    async function loadCasesDropdown() {
+      try {
+        const cases = await API.get('/api/cases');
+        document.getElementById('report-case').innerHTML = '<option value="">Select case...</option>' +
+          cases.map(c => `<option value="${c.id}">${c.case_number} — ${c.case_type}</option>`).join('');
+      } catch (err) { console.error(err); }
+    }
+
+    async function handleGenerateReport(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-generate-report');
+      btn.disabled = true;
+      btn.textContent = 'Generating...';
+
+      try {
+        const caseId = document.getElementById('report-case').value;
+        const result = await API.post(`/api/reports/generate/${caseId}`);
+        UI.closeModal('generate-report-modal');
+        Toast.success('Report generated successfully!');
+        loadReports();
+      } catch (err) {
+        Toast.error(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generate PDF';
+      }
+    }
+
+    loadCasesDropdown();
+    loadReports();
+  </script>
+</body>
+</html>

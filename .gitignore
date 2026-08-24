@@ -1,0 +1,32 @@
+# Environment
+.env
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Database
+*.db
+*.db-journal
+
+# Forensic data (do not commit real evidence)
+forensic/images/*
+forensic/recovered/*
+!forensic/images/.gitkeep
+!forensic/recovered/.gitkeep
+
+# Reports
+reports/*.pdf
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Distribution
+dist/
+build/
+*.egg-info/
