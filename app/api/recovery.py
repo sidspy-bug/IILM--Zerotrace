@@ -2,7 +2,12 @@
 Recovery API — manage recovery jobs and recovered artifacts.
 """
 
+import os
+import mimetypes
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse as FastAPIFileResponse
+from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -12,9 +17,13 @@ from app.database.database import get_db
 from app.models.recovery import RecoveryJob, RecoveredArtifact
 from app.models.user import User
 from app.services.recovery import create_recovery_job, run_simulated_recovery, get_job_with_artifacts
-from app.utils.security import get_current_user, require_role
+from app.utils.security import get_current_user, require_role, SECRET_KEY, ALGORITHM
+from jose import JWTError, jwt as jose_jwt
 
 router = APIRouter(prefix="/api/recovery", tags=["Recovery"])
+
+# Base directory for resolving relative recovered_path values
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class RecoveryJobCreate(BaseModel):
@@ -108,3 +117,133 @@ async def add_artifact(
     await db.commit()
     await db.refresh(artifact)
     return artifact.to_dict()
+
+
+def _resolve_artifact_path(recovered_path: str) -> str:
+    """Resolve an artifact's recovered_path to an absolute filesystem path."""
+    if not recovered_path:
+        return None
+    if os.path.isabs(recovered_path):
+        return recovered_path
+    return os.path.join(BASE_DIR, recovered_path)
+
+
+@router.get("/artifacts/{artifact_id}/download")
+async def download_artifact(
+    artifact_id: int,
+    request: Request,
+    token: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Download / view a recovered artifact file.
+
+    Supports auth via:
+      - Standard Authorization header (Bearer token)
+      - Query parameter `?token=...` (for <img>/<iframe> embeds)
+    Validates token and ensures the referenced user exists.
+    """
+    # Determine token: prefer query param, otherwise check Authorization header
+    token_to_use = token
+    if not token_to_use:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token_to_use = auth_header.split(" ", 1)[1]
+
+    if not token_to_use:
+        raise HTTPException(status_code=401, detail="Token required — pass ?token= query param or Authorization header")
+
+    try:
+        payload = jose_jwt.decode(token_to_use, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    # Verify user exists
+    result_user = await db.execute(select(User).where(User.username == username))
+    user = result_user.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token user")
+
+    result = await db.execute(
+        select(RecoveredArtifact).where(RecoveredArtifact.id == artifact_id)
+    )
+    artifact = result.scalar_one_or_none()
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    file_path = _resolve_artifact_path(artifact.recovered_path)
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Artifact file not found on disk")
+
+    media_type, _ = mimetypes.guess_type(file_path)
+    return FastAPIFileResponse(
+        path=file_path,
+        filename=artifact.original_name,
+        media_type=media_type or "application/octet-stream",
+    )
+
+
+@router.get("/artifacts/{artifact_id}/preview")
+async def preview_artifact(
+    artifact_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the text content of a recovered artifact for in-browser preview."""
+    result = await db.execute(
+        select(RecoveredArtifact).where(RecoveredArtifact.id == artifact_id)
+    )
+    artifact = result.scalar_one_or_none()
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    file_path = _resolve_artifact_path(artifact.recovered_path)
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Artifact file not found on disk")
+
+    # Determine if this is a previewable text-based file
+    TEXT_EXTENSIONS = {".txt", ".csv", ".log", ".eml", ".html", ".json", ".xml", ".md"}
+    _, ext = os.path.splitext(artifact.original_name.lower())
+
+    if ext in TEXT_EXTENSIONS:
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read(100_000)  # Cap at 100KB for safety
+            return {
+                "artifact_id": artifact.id,
+                "original_name": artifact.original_name,
+                "preview_type": "text",
+                "content": content,
+            }
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to read artifact file")
+
+    # For images, return a pointer to the download URL
+    IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg"}
+    if ext in IMAGE_EXTENSIONS:
+        return {
+            "artifact_id": artifact.id,
+            "original_name": artifact.original_name,
+            "preview_type": "image",
+            "download_url": f"/api/recovery/artifacts/{artifact.id}/download",
+        }
+
+    # For PDF
+    if ext == ".pdf":
+        return {
+            "artifact_id": artifact.id,
+            "original_name": artifact.original_name,
+            "preview_type": "pdf",
+            "download_url": f"/api/recovery/artifacts/{artifact.id}/download",
+        }
+
+    return {
+        "artifact_id": artifact.id,
+        "original_name": artifact.original_name,
+        "preview_type": "binary",
+        "message": "This file type cannot be previewed. Use the download button.",
+        "download_url": f"/api/recovery/artifacts/{artifact.id}/download",
+    }
+

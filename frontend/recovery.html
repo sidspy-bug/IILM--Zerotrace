@@ -7,6 +7,221 @@
   <title>Recovery — ForensicRecover</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Artifact Preview Modal ── */
+    .preview-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+    .preview-overlay.active { display: flex; }
+
+    .preview-modal {
+      background: var(--bg-primary);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      width: 820px;
+      max-width: 94vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .preview-header {
+      padding: var(--space-4) var(--space-6);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(135deg, var(--slate-50) 0%, var(--indigo-50) 100%);
+      flex-shrink: 0;
+    }
+
+    .preview-header-info {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+
+    .preview-file-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .preview-file-icon.image { background: #DBEAFE; color: #2563EB; }
+    .preview-file-icon.text  { background: #ECFDF5; color: #059669; }
+    .preview-file-icon.pdf   { background: #FEF2F2; color: #DC2626; }
+    .preview-file-icon.data  { background: #FEF3C7; color: #D97706; }
+    .preview-file-icon.binary { background: var(--slate-100); color: var(--slate-600); }
+
+    .preview-file-name {
+      font-weight: 600;
+      font-size: var(--font-size-md);
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .preview-file-meta {
+      font-size: var(--font-size-xs);
+      color: var(--text-muted);
+    }
+
+    .preview-header-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-shrink: 0;
+    }
+
+    .preview-body {
+      flex: 1;
+      overflow: auto;
+      padding: var(--space-6);
+      min-height: 300px;
+    }
+
+    .preview-body.loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Spinner */
+    .preview-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--slate-200);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Image preview */
+    .preview-image-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 250px;
+      background: repeating-conic-gradient(var(--slate-100) 0% 25%, transparent 0% 50%) 50%/20px 20px;
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+    }
+    .preview-image-container img {
+      max-width: 100%;
+      max-height: 60vh;
+      border-radius: var(--radius-sm);
+      box-shadow: var(--elevation-2);
+    }
+
+    /* Text preview */
+    .preview-text-container {
+      background: var(--slate-900);
+      color: #E2E8F0;
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      font-family: 'Courier New', monospace;
+      font-size: var(--font-size-sm);
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 60vh;
+      overflow: auto;
+      position: relative;
+    }
+    .preview-text-container .line-numbers {
+      position: absolute;
+      left: 0; top: 0;
+      padding: var(--space-5);
+      padding-right: var(--space-3);
+      color: var(--slate-500);
+      text-align: right;
+      user-select: none;
+      font-size: var(--font-size-xs);
+      line-height: 1.7;
+      border-right: 1px solid var(--slate-700);
+    }
+    .preview-text-content {
+      padding-left: 54px;
+    }
+
+    /* Binary / not-previewable */
+    .preview-binary {
+      text-align: center;
+      padding: var(--space-12) var(--space-6);
+    }
+    .preview-binary svg {
+      width: 64px; height: 64px;
+      color: var(--text-muted);
+      margin-bottom: var(--space-4);
+    }
+    .preview-binary h3 {
+      font-weight: 600;
+      margin-bottom: var(--space-2);
+      color: var(--text-secondary);
+    }
+    .preview-binary p {
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
+      margin-bottom: var(--space-6);
+    }
+
+    /* PDF preview */
+    .preview-pdf-container iframe {
+      width: 100%;
+      height: 60vh;
+      border: none;
+      border-radius: var(--radius-md);
+    }
+
+    /* Artifact row action buttons */
+    .artifact-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-view, .btn-download-sm {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: all 150ms ease;
+    }
+    .btn-view {
+      background: var(--indigo-50);
+      color: var(--indigo-600);
+    }
+    .btn-view:hover {
+      background: var(--indigo-100);
+    }
+    .btn-download-sm {
+      background: var(--slate-100);
+      color: var(--slate-600);
+    }
+    .btn-download-sm:hover {
+      background: var(--slate-200);
+    }
+  </style>
 </head>
 <body>
   <div class="app-layout">
@@ -72,6 +287,7 @@
                     <th>Status</th>
                     <th>Size</th>
                     <th>SHA-256</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="artifacts-body"></tbody>
@@ -108,10 +324,37 @@
     </div>
   </div>
 
+  <!-- Artifact Preview Modal -->
+  <div class="preview-overlay" id="preview-modal">
+    <div class="preview-modal">
+      <div class="preview-header">
+        <div class="preview-header-info">
+          <div class="preview-file-icon" id="preview-icon">📄</div>
+          <div>
+            <div class="preview-file-name" id="preview-filename">file.txt</div>
+            <div class="preview-file-meta" id="preview-meta"></div>
+          </div>
+        </div>
+        <div class="preview-header-actions">
+          <button class="btn btn-sm btn-primary" id="preview-download-btn" onclick="downloadCurrentArtifact()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+          </button>
+          <button class="modal-close" onclick="closePreview()">✕</button>
+        </div>
+      </div>
+      <div class="preview-body loading" id="preview-body">
+        <div class="preview-spinner"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/app.js"></script>
   <script>
     if (!requireAuth()) throw new Error('Not authenticated');
     document.getElementById('sidebar-container').innerHTML = renderSidebar('recovery');
+
+    let currentArtifactId = null;
 
     async function loadJobs() {
       try {
@@ -184,28 +427,191 @@
       }
     }
 
+    function getFileIconInfo(filename, type) {
+      const ext = filename.split('.').pop().toLowerCase();
+      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
+      const textExts = ['txt', 'log', 'eml', 'md'];
+      const dataExts = ['csv', 'json', 'xml'];
+
+      if (imageExts.includes(ext)) return { icon: '🖼️', cls: 'image' };
+      if (ext === 'pdf') return { icon: '📑', cls: 'pdf' };
+      if (textExts.includes(ext)) return { icon: '📝', cls: 'text' };
+      if (dataExts.includes(ext)) return { icon: '📊', cls: 'data' };
+      if (ext === 'html') return { icon: '🌐', cls: 'text' };
+      if (['zip', 'rar', '7z'].includes(ext)) return { icon: '📦', cls: 'binary' };
+      return { icon: '📄', cls: 'binary' };
+    }
+
     function showArtifactData(result) {
       const panel = document.getElementById('artifacts-panel');
       panel.classList.remove('hidden');
       document.getElementById('artifacts-title').textContent = `Recovered Artifacts — Job #${result.job.id}`;
 
       const tbody = document.getElementById('artifacts-body');
-      tbody.innerHTML = result.artifacts.map((a, i) => `
+      tbody.innerHTML = result.artifacts.map((a, i) => {
+        const fi = getFileIconInfo(a.original_name, a.artifact_type);
+        return `
         <tr>
           <td>${i + 1}</td>
-          <td><strong>${a.original_name}</strong></td>
+          <td>
+            <div class="flex items-center gap-2">
+              <span style="font-size:16px">${fi.icon}</span>
+              <strong>${a.original_name}</strong>
+            </div>
+          </td>
           <td>${a.artifact_type || '—'}</td>
           <td>${UI.badge(a.recovery_status)}</td>
           <td class="text-sm">${UI.formatSize(a.size)}</td>
           <td class="text-xs font-mono text-muted" style="max-width:140px" title="${a.hash_value}">${a.hash_value ? a.hash_value.substring(0, 16) + '...' : '—'}</td>
+          <td>
+            <div class="artifact-actions">
+              <button class="btn-view" onclick="previewArtifact(${a.id}, '${a.original_name}', '${a.artifact_type}', ${a.size})">
+                👁 View
+              </button>
+              <button class="btn-download-sm" onclick="downloadArtifact(${a.id}, '${a.original_name}')">
+                ⬇ Save
+              </button>
+            </div>
+          </td>
         </tr>
-      `).join('');
+      `}).join('');
 
       panel.scrollIntoView({ behavior: 'smooth' });
     }
+
+    // ── Preview Functions ──
+
+    async function previewArtifact(artifactId, filename, type, size) {
+      currentArtifactId = artifactId;
+      const overlay = document.getElementById('preview-modal');
+      const body = document.getElementById('preview-body');
+      const fi = getFileIconInfo(filename, type);
+
+      // Update header
+      document.getElementById('preview-filename').textContent = filename;
+      document.getElementById('preview-meta').textContent = `${type || 'File'} • ${UI.formatSize(size)}`;
+      const iconEl = document.getElementById('preview-icon');
+      iconEl.textContent = fi.icon;
+      iconEl.className = 'preview-file-icon ' + fi.cls;
+
+      // Show modal with spinner
+      overlay.classList.add('active');
+      body.className = 'preview-body loading';
+      body.innerHTML = '<div class="preview-spinner"></div>';
+
+      try {
+        const data = await API.get(`/api/recovery/artifacts/${artifactId}/preview`);
+        body.className = 'preview-body';
+
+        if (data.preview_type === 'text') {
+          const lines = data.content.split('\n');
+          const lineNums = lines.map((_, i) => i + 1).join('\n');
+          body.innerHTML = `
+            <div class="preview-text-container">
+              <div class="line-numbers">${lineNums}</div>
+              <div class="preview-text-content">${escapeHtml(data.content)}</div>
+            </div>
+          `;
+        } else if (data.preview_type === 'image') {
+          body.innerHTML = `
+            <div class="preview-image-container">
+              <img src="${data.download_url}" alt="${filename}" onerror="this.parentElement.innerHTML='<div class=\\'preview-binary\\'><h3>Image could not be loaded</h3><p>The image data may be corrupted or in an unsupported format.</p></div>'">
+            </div>
+          `;
+        } else if (data.preview_type === 'pdf') {
+          body.innerHTML = `
+            <div class="preview-pdf-container">
+              <iframe src="${data.download_url}" title="PDF Preview"></iframe>
+            </div>
+          `;
+        } else {
+          body.innerHTML = `
+            <div class="preview-binary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <h3>Preview not available</h3>
+              <p>${data.message || 'This file type cannot be previewed in the browser.'}</p>
+              <button class="btn btn-primary" onclick="downloadCurrentArtifact()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download File
+              </button>
+            </div>
+          `;
+        }
+      } catch (err) {
+        body.className = 'preview-body';
+        body.innerHTML = `
+          <div class="preview-binary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <h3>Failed to load preview</h3>
+            <p>${err.message}</p>
+          </div>
+        `;
+      }
+    }
+
+    function closePreview() {
+      document.getElementById('preview-modal').classList.remove('active');
+      currentArtifactId = null;
+    }
+
+    function downloadCurrentArtifact() {
+      if (!currentArtifactId) return;
+      const filename = document.getElementById('preview-filename').textContent;
+      downloadArtifact(currentArtifactId, filename);
+    }
+
+    function downloadArtifact(artifactId, filename) {
+      const token = localStorage.getItem('fr_token');
+      const url = `/api/recovery/artifacts/${artifactId}/download`;
+
+      fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Download failed');
+          return res.blob();
+        })
+        .then(blob => {
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+          Toast.success(`Downloaded: ${filename}`);
+        })
+        .catch(err => Toast.error(err.message));
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Close preview on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closePreview();
+    });
+
+    // Close preview when clicking overlay background
+    document.getElementById('preview-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closePreview();
+    });
 
     loadEvidenceDropdown();
     loadJobs();
   </script>
 </body>
 </html>
+
+

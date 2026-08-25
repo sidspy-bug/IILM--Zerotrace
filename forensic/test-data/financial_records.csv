@@ -1,7 +1,7 @@
-Date,Transaction,Amount,Account
-2026-01-15,Transfer,5000,ACC-001
-2026-02-20,Withdrawal,12000,ACC-001
-2026-03-10,Transfer,8500,ACC-002
-2026-04-05,Deposit,25000,ACC-003
-2026-05-18,Transfer,15000,ACC-001
-2026-06-22,Withdrawal,7500,ACC-002
+Date,TransactionID,From,To,Amount_INR,Note
+2026-08-01,TXN-001,MainAccount,ShellCorp_A,1000000,Consulting
+2026-08-05,TXN-002,ShellCorp_A,OffshoreAcc,1000000,Investment
+2026-08-10,TXN-003,MainAccount,ShellCorp_B,1500000,Services
+2026-08-15,TXN-004,ShellCorp_B,CryptoWallet_X,1500000,Transfer
+2026-08-18,TXN-005,MainAccount,ShellCorp_C,2500000,Royalties
+2026-08-20,TXN-006,ShellCorp_C,OffshoreAcc,2500000,Final

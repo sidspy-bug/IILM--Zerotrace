@@ -106,6 +106,30 @@ However, depending on the storage technology, filesystem, system activity, and o
 
 ForensicRecover provides a structured workflow for examining such evidence.
 
+## Environment variables & running (development)
+
+Required environment variables:
+
+- `SECRET_KEY` — a strong secret used to sign JWTs. **Must** be set for production.
+- `DATABASE_URL` — optional, defaults to `sqlite+aiosqlite:///./forensic.db` (use Postgres in production).
+- `ALGORITHM` — optional JWT algorithm (default: `HS256`).
+- `ACCESS_TOKEN_EXPIRE_MINUTES` — optional token TTL (default: `480`).
+- `DEV_MODE` — optional; set to `1`, `true`, or `yes` to allow a secure runtime-only secret to be generated for local development when `SECRET_KEY` is not set (not for production).
+
+Quick local run (PowerShell):
+
+```powershell
+$env:SECRET_KEY = "your-strong-secret-here"
+# optional: $env:DEV_MODE = "1"  # only for local dev, not production
+python -m uvicorn app.main:app --reload --port 8000
+```
+
+Notes:
+
+- The application will refuse to start in non-dev mode if `SECRET_KEY` is not set.
+- For production, provide a persistent `SECRET_KEY` and run behind a TLS-terminating proxy (nginx, load balancer).
+- Consider using a managed database (Postgres) and a secrets manager for production secrets.
+
 The platform does **not** promise that every deleted file can be recovered.
 
 Its objective is:

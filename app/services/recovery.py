@@ -6,6 +6,8 @@ For the MVP, this simulates forensic recovery by scanning test directories.
 import os
 import random
 from datetime import datetime, timezone
+import subprocess
+import shutil
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 

@@ -1,10 +1,8 @@
-Personal conversation transcript - SIMULATED TEST DATA
-
-User1: Can we meet tomorrow at the usual place?
-User2: Yes, 3PM works for me.
-User1: Bring the documents we discussed.
-User2: Already prepared. Will bring everything.
-User1: Good. Delete this conversation after reading.
-User2: Understood.
-
-[END OF SIMULATED CONVERSATION - TEST DATA ONLY]
+=== PRIVATE CHAT LOG — 2026-08-20 ===
+[10:02] User_A: Did you transfer the funds?
+[10:03] User_B: Yes, done. 50 lakh to offshore account.
+[10:05] User_A: Delete this chat after.
+[10:06] User_B: Already done on my end.
+[10:08] User_A: The police wont find anything.
+[10:10] User_B: Good. Meeting at the usual place at 9 PM.
+=== END OF LOG ===

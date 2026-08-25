@@ -1,8 +1,12 @@
-This is a sample evidence document used for forensic recovery testing.
-Case Reference: DEMO-001
-Date: 2026-08-24
+CONFIDENTIAL INVESTIGATION NOTES
+Subject: Financial Fraud and Money Laundering
+Date: 2026-08-20
 
-This file simulates a deleted document that would be found during forensic analysis.
-Content: Sample investigation notes and observations.
+Key Findings:
+1. Subject transferred INR 50 lakhs through 3 shell companies
+2. Offshore account in Cayman Islands identified
+3. Crypto wallet used to launder proceeds
+4. Multiple devices used — laptop + 2 mobile phones
+5. Accomplice identified via email evidence
 
-CONFIDENTIAL - FOR AUTHORIZED INVESTIGATION USE ONLY
+Status: UNDER ACTIVE INVESTIGATION

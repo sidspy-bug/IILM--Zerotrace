@@ -1,0 +1,7 @@
+Date,Description,Debit,Credit,Balance
+2026-08-01,Opening Balance,,,12000000
+2026-08-01,NEFT to ShellCorp_A,1000000,,11000000
+2026-08-05,RTGS to ShellCorp_B,1500000,,9500000
+2026-08-10,Wire Transfer Offshore,2500000,,7000000
+2026-08-15,Cash Withdrawal,500000,,6500000
+2026-08-20,Final Transfer,5000000,,1500000
